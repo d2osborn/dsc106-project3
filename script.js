@@ -51,11 +51,9 @@ function getCheckedHealthGroups() {
 function initialize() {
     d3.select('#nutrientFocus').on('change', updateChart);
 
-    // Listen for changes on any health group checkbox
     document.querySelectorAll('.health-checkbox').forEach(cb => {
         cb.addEventListener('change', function (e) {
             const checkedBoxes = document.querySelectorAll('.health-checkbox:checked');
-            // Prevent unchecking last box
             if (checkedBoxes.length === 0) {
                 e.target.checked = true;
             }
@@ -87,7 +85,6 @@ function updateChart() {
     const focus = d3.select('#nutrientFocus').property('value');
     const groupsToPlot = getCheckedHealthGroups();
 
-    // Always at least one group due to logic above
     const datasets = groupsToPlot.map(hg => {
         const filtered = rawData.filter(d =>
             d.nutrientFocus === focus && d.healthGroup === hg
@@ -110,8 +107,10 @@ function renderChart(datasets, focus) {
     g.selectAll('.data-line').remove();
     g.selectAll('.grid-x').remove();
     g.selectAll('.grid-y').remove();
+    g.selectAll('.brush').remove();
+    g.selectAll('.zoom-highlight').remove();
+    d3.select('#inset-zoom').remove();
 
-    // Add or update clipPath for the chart area
     svgSel.select('defs').remove();
     svgSel.insert('defs', ':first-child')
         .append('clipPath')
@@ -122,33 +121,17 @@ function renderChart(datasets, focus) {
 
     const allTimes = datasets.flatMap(d => d.points.map(p => p.time));
     const allMeans = datasets.flatMap(d => d.points.map(p => p.mean));
-    const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
-    const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
+    let xDomain = d3.extent(allTimes);
+    let zoomedIn = false;
 
-    // --- ZOOM: Only x-axis ---
-    const zoom = d3.zoom()
-        .scaleExtent([1, 10])
-        .translateExtent([[0, 0], [width, height]])
-        .extent([[0, 0], [width, height]])
-        .on("zoom", zoomed);
-
-    svgSel.on(".zoom", null); // Remove previous zoom if any
-    svgSel.call(zoom);
-
-    function zoomed(event) {
-        const t = event.transform;
-        const zx = t.rescaleX(x);
-        g.select('.x-axis').call(d3.axisBottom(zx));
-        g.select('.y-axis').call(d3.axisLeft(y));
-        const lineGen = d3.line()
-            .x(d => zx(d.time))
-            .y(d => y(d.mean))
-            .curve(d3.curveMonotoneX);
-        g.selectAll('.data-line')
-            .attr('d', d => lineGen(d.points));
+    if (renderChart.currentXDomain) {
+        xDomain = renderChart.currentXDomain;
+        zoomedIn = true;
     }
 
-    // Draw grid first
+    const x = d3.scaleLinear().domain(xDomain).nice().range([0, width]);
+    const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
+
     g.append('g')
      .attr('class', 'grid-x')
      .attr('transform', `translate(0,${height})`)
@@ -163,7 +146,6 @@ function renderChart(datasets, focus) {
     g.select('.x-axis').transition().duration(600).call(d3.axisBottom(x));
     g.select('.y-axis').transition().duration(600).call(d3.axisLeft(y));
 
-    // X axis label
     g.selectAll('.x-axis-label').remove();
     g.append('text')
         .attr('class', 'x-axis-label')
@@ -174,7 +156,6 @@ function renderChart(datasets, focus) {
         .style('fill', '#333')
         .text('Minutes After Meal');
 
-    // Y axis label
     g.selectAll('.y-axis-label').remove();
     g.append('text')
         .attr('class', 'y-axis-label')
@@ -191,12 +172,10 @@ function renderChart(datasets, focus) {
         .y(d => y(d.mean))
         .curve(d3.curveMonotoneX);
 
-    // Create linesGroup after grid
     const linesGroup = g.append('g')
         .attr('class', 'lines-group')
         .attr('clip-path', 'url(#chart-clip)');
 
-    // Draw lines after grid
     datasets.forEach(ds => {
         const path = linesGroup.append('path')
             .datum(ds)
@@ -232,39 +211,79 @@ function renderChart(datasets, focus) {
      .attr('style', 'font-size:18px;font-weight:700;fill:#2d3748;max-width:440px;white-space:pre-line;')
      .text(`Glucose Response (${focus}) by Health Group`);
 
-    // --- ZOOM INDICATOR ---
-    // Remove any previous indicator
+    const brush = d3.brushX()
+        .extent([[0, 0], [width, height]])
+        .on('end', function(event) {
+            if (!event.selection) return;
+            const [x0, x1] = event.selection;
+            const xDomainNew = [x.invert(x0), x.invert(x1)];
+            if (x1 - x0 < 10) return;
+            hideZoomIndicator();
+            renderChart.currentXDomain = xDomainNew;
+            renderChart(datasets, focus);
+            showZoomedMessage();
+        });
+
+    if (!zoomedIn) {
+        g.append('g')
+            .attr('class', 'brush')
+            .call(brush);
+    }
+
+    svgSel.on('dblclick', function() {
+        if (renderChart.currentXDomain) {
+            hideZoomIndicator();
+            renderChart.currentXDomain = null;
+            renderChart(datasets, focus);
+        }
+    });
+
     d3.select('#zoom-indicator').remove();
-    // Add indicator div
     d3.select('#lineChartContainer')
         .append('div')
         .attr('id', 'zoom-indicator')
         .attr('class', 'zoom-indicator')
         .style('display', 'none')
-        .text('Tip: Scroll or pinch to zoom in/out on the x-axis');
+        .text('Tip: Drag to select a region to zoom in along the x-axis. Double-click the chart to reset zoom.');
 
-    // Show indicator on hover, hide after 2.5s or on mouseleave
-    const chartDiv = document.getElementById('lineChart');
     let zoomIndicatorTimeout;
-    chartDiv.addEventListener('mouseenter', () => {
+    let indicatorActive = false;
+
+    function showZoomIndicator(message) {
         const indicator = document.getElementById('zoom-indicator');
         if (indicator) {
+            indicator.textContent = message;
             indicator.style.display = 'block';
             indicator.style.opacity = '1';
+            indicatorActive = true;
             clearTimeout(zoomIndicatorTimeout);
             zoomIndicatorTimeout = setTimeout(() => {
                 indicator.style.opacity = '0';
-                setTimeout(() => { indicator.style.display = 'none'; }, 400);
-            }, 2500);
+                setTimeout(() => { indicator.style.display = 'none'; indicatorActive = false; }, 400);
+            }, 10000);
         }
-    });
-    chartDiv.addEventListener('mouseleave', () => {
+    }
+
+    function hideZoomIndicator() {
         const indicator = document.getElementById('zoom-indicator');
         if (indicator) {
             indicator.style.opacity = '0';
-            setTimeout(() => { indicator.style.display = 'none'; }, 400);
+            setTimeout(() => { indicator.style.display = 'none'; indicatorActive = false; }, 400);
         }
         clearTimeout(zoomIndicatorTimeout);
+    }
+
+    function showZoomedMessage() {
+        showZoomIndicator('Zoomed in! Double-click the chart to return to the full view.');
+    }
+
+    const chartDiv = document.getElementById('lineChart');
+    chartDiv.addEventListener('mouseenter', () => {
+        if (renderChart.currentXDomain) return;
+        showZoomIndicator('Tip: Drag to select a region to zoom in along the x-axis. Double-click the chart to reset zoom.');
+    });
+    chartDiv.addEventListener('mouseleave', () => {
+        hideZoomIndicator();
     });
 }
 
@@ -294,10 +313,9 @@ function renderDonutChart(focus, groups) {
 
     const arc = d3.arc().innerRadius(r - 40).outerRadius(r);
     const pie = d3.pie()
-        .sort((a, b) => a.index - b.index) // Always keep order: Carbs, Protein, Fat
+        .sort((a, b) => a.index - b.index)
         .value(d => d.value);
 
-    // Store previous data for smooth transitions
     if (!renderDonutChart.prevData) {
         renderDonutChart.prevData = [
             { label: 'Carbs', value: meanCarbs, color: '#4fd1c5', index: 0 },
@@ -307,7 +325,6 @@ function renderDonutChart(focus, groups) {
     }
     const prevData = renderDonutChart.prevData;
 
-    // Bind data and animate arcs to new values, keeping order fixed
     const arcs = svg.selectAll('path')
         .data(pie(data), d => d.data.label);
 
@@ -317,7 +334,6 @@ function renderDonutChart(focus, groups) {
         .attr('stroke', '#fff')
         .attr('stroke-width', 2)
         .each(function(d, i) {
-            // Set initial state to previous data for smooth animation
             const prevPie = pie(prevData);
             this._current = prevPie[i];
         })
@@ -353,7 +369,7 @@ function renderDonutChart(focus, groups) {
 
     arcs.exit().remove();
 
-    renderDonutChart.prevData = data.map(d => ({ ...d })); // Save for next update
+    renderDonutChart.prevData = data.map(d => ({ ...d }));
 
     svg.selectAll('.calories-text').remove();
     svg.append('text')
@@ -389,7 +405,6 @@ function renderDonutChart(focus, groups) {
             .on('click', () => toggleSegment(d.label));
     });
 
-    // Add hover effect for donut legend text (turn blue)
     svg.selectAll('.donut-legend-text')
         .on('mouseover', function() {
             d3.select(this).style('fill', '#38bdf8');
@@ -423,7 +438,6 @@ function hideTooltip() {
 
 function toggleSegment(label) {
     console.log(`Toggled visibility for ${label}`);
-    // Add logic to toggle visibility of the corresponding segment
 }
 
 function showLoading(show) {
@@ -438,10 +452,8 @@ function showLoading(show) {
     }
 }
 
-// Show loading at the start
 showLoading(true);
 
-// Fetch and parse data
 fetch('./merged_data.csv.zip')
     .then(res => {
         if (!res.ok) throw new Error(`Failed to fetch: ${res.statusText}`);
@@ -457,7 +469,7 @@ fetch('./merged_data.csv.zip')
         const rows = d3.csvParse(text);
         rows.forEach(parseRow);
         initialize();
-        showLoading(false); // Hide loading, show content
+        showLoading(false);
     })
     .catch(err => {
         console.error("Error loading or parsing data:", err);

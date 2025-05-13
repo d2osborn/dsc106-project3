@@ -30,13 +30,24 @@
                 <option>High-Protein</option>
                 <option>High-Fat</option>
             </select>
-            <label>Health Group:</label>
-            <select id="healthGroup">
-                <option>All</option>
-                <option>Healthy</option>
-                <option>Pre-diabetic</option>
-                <option>Type 2 Diabetic</option>
-            </select>
+            <label style="margin-right: 8px;">Health Group:</label>
+            <div id="healthGroupCheckboxes" style="display: flex; gap: 18px; align-items: center;">
+                <label class="health-checkbox-label" style="display: flex; align-items: center; gap: 6px;">
+                    <input type="checkbox" class="health-checkbox" value="Healthy" checked>
+                    <span class="custom-checkbox"></span>
+                    Healthy
+                </label>
+                <label class="health-checkbox-label" style="display: flex; align-items: center; gap: 6px;">
+                    <input type="checkbox" class="health-checkbox" value="Pre-diabetic" checked>
+                    <span class="custom-checkbox"></span>
+                    Pre-diabetic
+                </label>
+                <label class="health-checkbox-label" style="display: flex; align-items: center; gap: 6px;">
+                    <input type="checkbox" class="health-checkbox" value="Type 2 Diabetic" checked>
+                    <span class="custom-checkbox"></span>
+                    Type 2 Diabetic
+                </label>
+            </div>
         </div>
         <div class="charts-row">
             <div class="chart-container" id="lineChartContainer">

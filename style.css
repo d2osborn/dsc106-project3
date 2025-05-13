@@ -148,6 +148,11 @@ path:hover {
     cursor: pointer;
 }
 
+.donut-legend-text:hover {
+    fill: #38bdf8 !important;
+    cursor: pointer;
+}
+
 .spinner {
     border: 6px solid #e2e8f0;
     border-top: 6px solid #38bdf8;
@@ -161,6 +166,60 @@ path:hover {
 @keyframes spin {
     0% { transform: rotate(0deg);}
     100% { transform: rotate(360deg);}
+}
+
+.health-checkbox-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: #2d3748;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Hide the native checkbox but keep it accessible */
+.health-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* Custom checkbox visual */
+.custom-checkbox {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #bfc7d1;
+    border-radius: 3px;
+    background: #fff;
+    margin-right: 2px;
+    vertical-align: middle;
+    transition: border 0.2s, background 0.2s;
+    box-sizing: border-box;
+}
+
+/* Checked state: color fill */
+.health-checkbox:checked + .custom-checkbox {
+    background: #1f77b4;
+    border-color: #1f77b4;
+}
+.health-checkbox[value="Pre-diabetic"]:checked + .custom-checkbox {
+    background: #ff7f0e;
+    border-color: #ff7f0e;
+}
+.health-checkbox[value="Type 2 Diabetic"]:checked + .custom-checkbox {
+    background: #2ca02c;
+    border-color: #2ca02c;
+}
+
+/* Remove checkmark, just show colored box */
+.custom-checkbox::after {
+    content: '';
+    display: none;
+}
+
+#healthGroupCheckboxes {
+    margin-left: 0;
 }
 
 @media (max-width: 900px) {

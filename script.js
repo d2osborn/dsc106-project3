@@ -44,9 +44,24 @@ function parseRow(r) {
     });
 }
 
+function getCheckedHealthGroups() {
+    return Array.from(document.querySelectorAll('.health-checkbox:checked')).map(cb => cb.value);
+}
+
 function initialize() {
     d3.select('#nutrientFocus').on('change', updateChart);
-    d3.select('#healthGroup').on('change', updateChart);
+
+    // Listen for changes on any health group checkbox
+    document.querySelectorAll('.health-checkbox').forEach(cb => {
+        cb.addEventListener('change', function (e) {
+            const checkedBoxes = document.querySelectorAll('.health-checkbox:checked');
+            // Prevent unchecking last box
+            if (checkedBoxes.length === 0) {
+                e.target.checked = true;
+            }
+            updateChart();
+        });
+    });
 
     const svg = d3.select('#lineChart').append('svg')
         .attr('width', width + margin.left + margin.right)
@@ -70,9 +85,9 @@ function updateChart() {
     }
 
     const focus = d3.select('#nutrientFocus').property('value');
-    const group = d3.select('#healthGroup').property('value');
-    const groupsToPlot = group === 'All' ? healthGroups : [group];
+    const groupsToPlot = getCheckedHealthGroups();
 
+    // Always at least one group due to logic above
     const datasets = groupsToPlot.map(hg => {
         const filtered = rawData.filter(d =>
             d.nutrientFocus === focus && d.healthGroup === hg
@@ -86,19 +101,47 @@ function updateChart() {
         return { group: hg, points: pts };
     });
     renderChart(datasets, focus);
-    renderDonutChart(focus, group);
+    renderDonutChart(focus, groupsToPlot);
 }
 
 function renderChart(datasets, focus) {
+    const svgSel = d3.select('#lineChart svg');
     const g = d3.select('.line-g');
     g.selectAll('.data-line').remove();
     g.selectAll('.grid-x').remove();
     g.selectAll('.grid-y').remove();
 
+    // Add or update clipPath for the chart area
+    svgSel.select('defs').remove();
+    svgSel.insert('defs', ':first-child')
+        .append('clipPath')
+        .attr('id', 'chart-clip')
+        .append('rect')
+        .attr('width', width)
+        .attr('height', height);
+
+    // Group for lines, clipped to chart area
+    let linesGroup = g.select('.lines-group');
+    if (linesGroup.empty()) {
+        linesGroup = g.append('g').attr('class', 'lines-group').attr('clip-path', 'url(#chart-clip)');
+    } else {
+        linesGroup.attr('clip-path', 'url(#chart-clip)');
+        linesGroup.selectAll('*').remove();
+    }
+
     const allTimes = datasets.flatMap(d => d.points.map(p => p.time));
     const allMeans = datasets.flatMap(d => d.points.map(p => p.mean));
     const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
     const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
+
+    // Add zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([1, 10])
+        .translateExtent([[0, 0], [width, height]])
+        .extent([[0, 0], [width, height]])
+        .on("zoom", zoomed);
+
+    svgSel.call(zoom);
 
     g.append('g')
      .attr('class', 'grid-x')
@@ -143,7 +186,7 @@ function renderChart(datasets, focus) {
         .curve(d3.curveMonotoneX);
 
     datasets.forEach(ds => {
-        const path = g.append('path')
+        const path = linesGroup.append('path')
             .datum(ds.points)
             .attr('class', 'data-line')
             .attr('fill', 'none')
@@ -176,14 +219,32 @@ function renderChart(datasets, focus) {
      .attr('text-anchor', 'middle')
      .attr('style', 'font-size:18px;font-weight:700;fill:#2d3748;max-width:440px;white-space:pre-line;')
      .text(`Glucose Response (${focus}) by Health Group`);
+
+    function zoomed(event) {
+        const t = event.transform;
+        const zx = t.rescaleX(x);
+        const zy = t.rescaleY(y);
+
+        // Redraw axes
+        g.select('.x-axis').call(d3.axisBottom(zx));
+        g.select('.y-axis').call(d3.axisLeft(zy));
+
+        // Redraw lines, clipped
+        const lineGen = d3.line()
+            .x(d => zx(d.time))
+            .y(d => zy(d.mean))
+            .curve(d3.curveMonotoneX);
+
+        linesGroup.selectAll('.data-line')
+            .attr('d', d => lineGen(d));
+    }
 }
 
-function renderDonutChart(focus, group) {
+function renderDonutChart(focus, groups) {
     const svgContainer = d3.select('#donutChart');
     svgContainer.selectAll('*').remove();
 
-    let filtered = rawData.filter(d => d.nutrientFocus === focus);
-    if (group !== 'All') filtered = filtered.filter(d => d.healthGroup === group);
+    let filtered = rawData.filter(d => d.nutrientFocus === focus && groups.includes(d.healthGroup));
     if (!filtered.length) return;
 
     const meanCarbs = d3.mean(filtered, d => d.carbs);
@@ -292,12 +353,22 @@ function renderDonutChart(focus, group) {
             .attr('fill', d.color);
         legend.append('text')
             .attr('x', 22).attr('y', i * 26 + 13)
+            .attr('class', 'donut-legend-text')
             .style('font-size', '14px')
             .style('font-weight', 'bold')
             .style('fill', '#222')
             .text(`${d.label}: ${d.value.toFixed(1)}g`)
             .on('click', () => toggleSegment(d.label));
     });
+
+    // Add hover effect for donut legend text (turn blue)
+    svg.selectAll('.donut-legend-text')
+        .on('mouseover', function() {
+            d3.select(this).style('fill', '#38bdf8');
+        })
+        .on('mouseout', function() {
+            d3.select(this).style('fill', '#222');
+        });
 }
 
 function showTooltip(event, text) {

@@ -25,6 +25,7 @@
             #lineChart, #donutChart { min-width: 260px; }
         }
     </style>
+    <link rel="icon" href="data:," />
 </head>
 <body>
     <div class="container">
@@ -101,16 +102,27 @@
         });
     }
 
-    fetch('merged_data.csv.zip')
-        .then(res => res.arrayBuffer())
+    // Ensure the fetch path is correct
+    fetch('./merged_data.csv.zip') // Ensure the file is in the same directory
+        .then(res => {
+            if (!res.ok) throw new Error(`Failed to fetch: ${res.statusText}`);
+            return res.arrayBuffer();
+        })
         .then(JSZip.loadAsync)
-        .then(zip => zip.file("merged_data.csv").async("string"))
+        .then(zip => {
+            const file = zip.file("merged_data.csv");
+            if (!file) throw new Error("merged_data.csv not found in the ZIP archive.");
+            return file.async("string");
+        })
         .then(text => {
             const rows = d3.csvParse(text);
             rows.forEach(parseRow);
             initialize();
         })
-        .catch(console.error);
+        .catch(err => {
+            console.error("Error loading or parsing data:", err);
+            alert("Failed to load data. Please check the console for details.");
+        });
 
     function initialize() {
         d3.select('#nutrientFocus').on('change', updateChart);
@@ -132,6 +144,12 @@
     }
 
     function updateChart() {
+        // Ensure rawData is not empty before proceeding
+        if (!rawData.length) {
+            console.warn("No data available to update charts.");
+            return;
+        }
+
         const focus = d3.select('#nutrientFocus').property('value');
         const group  = d3.select('#healthGroup').property('value');
         const groupsToPlot = group === 'All' ? healthGroups : [group];
@@ -163,7 +181,6 @@
         const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
         const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
 
-<<<<<<< HEAD
         // Add grid lines
         g.append('g')
          .attr('class', 'grid-x')
@@ -180,8 +197,6 @@
          );
 
         // Transition axes
-=======
->>>>>>> 33b6db8ca95b3c9790456cae440fc217dc0d952f
         g.select('.x-axis')
          .transition().duration(600)
          .call(d3.axisBottom(x));

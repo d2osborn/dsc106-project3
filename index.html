@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Comparative Glucose Response by Nutrient Focus and Health Group</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #controls { margin-bottom: 20px; }
+        select { margin-right: 20px; }
+        #lineChart { margin-top: 20px; }
+        svg { background-color: #f9f9f9; }
+        .count-text { font-size: 12px; fill: #666; }
+        .legend { font-size: 12px; }
+        .legend rect { stroke-width: 1; stroke: #000; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <label>Nutrient Focus:</label>
+        <select id="nutrientFocus">
+            <option>High-Carb</option>
+            <option>High-Protein</option>
+            <option>High-Fat</option>
+        </select>
+        <label>Health Group:</label>
+        <select id="healthGroup">
+            <option>All</option>
+            <option>Healthy</option>
+            <option>Pre-diabetic</option>
+            <option>Type 2 Diabetic</option>
+        </select>
+    </div>
+    <div id="lineChart"></div>
+
+    <script>
+    const margin = { top: 60, right: 150, bottom: 50, left: 60 };
+    const width  = 600 - margin.left - margin.right;
+    const height = 400 - margin.top - margin.bottom;
+
+    let rawData = [];
+    const healthGroups = ['Healthy','Pre-diabetic','Type 2 Diabetic'];
+    const colorScale = d3.scaleOrdinal()
+        .domain(healthGroups)
+        .range(['#1f77b4','#ff7f0e','#2ca02c']);
+
+    function parseRow(r) {
+        const carbs   = parseFloat((r['Carbs']||'').trim());
+        const protein = parseFloat((r['Protein']||'').trim());
+        const fat     = parseFloat((r['Fat']||'').trim());
+        if ([carbs,protein,fat].some(x=>isNaN(x))) return;
+        let nutrientFocus = 'High-Carb';
+        if (protein > carbs && protein >= fat) nutrientFocus = 'High-Protein';
+        else if (fat > carbs && fat > protein) nutrientFocus = 'High-Fat';
+
+        const a1cVal = parseFloat((r['A1c PDL (Lab)']||'').trim());
+        let healthGroup = 'Healthy';
+        if (a1cVal >= 6.5) healthGroup = 'Type 2 Diabetic';
+        else if (a1cVal >= 5.7) healthGroup = 'Pre-diabetic';
+
+        const sensors = [
+            {gl:'#1 Contour Fingerstick GLU', t:'Time (t)'},
+            {gl:' #2 Contour Fingerstick GLU', t:'Time (t).1'},
+            {gl:'#3 Contour Fingerstick GLU', t:'Time (t).2'}
+        ];
+        sensors.forEach(s => {
+            const glRaw = r[s.gl], tRaw = r[s.t];
+            if (!glRaw || !tRaw) return;
+            const glVal = parseFloat(glRaw);
+            const parts = tRaw.trim().split(':').map(x => parseInt(x, 10));
+            if (isNaN(glVal) || parts.length !== 2) return;
+            const [mm, ss] = parts;
+            if (isNaN(mm) || isNaN(ss)) return;
+            rawData.push({nutrientFocus, healthGroup, time: mm + ss/60, glucose: glVal});
+        });
+        ['Dexcom GL','Libre GL'].forEach(key => {
+            const val = parseFloat((r[key]||'').trim());
+            if (!isNaN(val)) rawData.push({nutrientFocus, healthGroup, time: 0, glucose: val});
+        });
+    }
+
+    d3.csv('merged_data.csv').then(rows => {
+        rows.forEach(parseRow);
+        initialize();
+    }).catch(console.error);
+
+    function initialize() {
+        d3.select('#nutrientFocus').on('change', updateChart);
+        d3.select('#healthGroup').on('change', updateChart);
+
+        const svg = d3.select('#lineChart').append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+          .append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`)
+            .attr('class','line-g');
+
+        svg.append('g').attr('class','x-axis').attr('transform', `translate(0,${height})`);
+        svg.append('g').attr('class','y-axis');
+        svg.append('g').attr('class','legend')
+           .attr('transform', `translate(${width+20},0)`);
+
+        updateChart();
+    }
+
+    function updateChart() {
+        const focus = d3.select('#nutrientFocus').property('value');
+        const group  = d3.select('#healthGroup').property('value');
+        const groupsToPlot = group === 'All' ? healthGroups : [group];
+
+        const datasets = groupsToPlot.map(hg => {
+            const filtered = rawData.filter(d =>
+                d.nutrientFocus === focus && d.healthGroup === hg
+            );
+            const agg = d3.rollup(filtered,
+                v => d3.mean(v, d => d.glucose),
+                d => d.time
+            );
+            const pts = Array.from(agg, ([time, mean]) => ({time, mean}))
+                                .sort((a, b) => a.time - b.time);
+            return { group: hg, points: pts };
+        });
+        renderChart(datasets, focus);
+    }
+
+    function renderChart(datasets, focus) {
+        const g = d3.select('.line-g');
+        g.selectAll('.data-line').remove();
+
+        const allTimes = datasets.flatMap(d => d.points.map(p => p.time));
+        const allMeans = datasets.flatMap(d => d.points.map(p => p.mean));
+        const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
+        const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
+
+        // Transition axes
+        g.select('.x-axis')
+         .transition().duration(600)
+         .call(d3.axisBottom(x));
+        g.select('.y-axis')
+         .transition().duration(600)
+         .call(d3.axisLeft(y));
+
+        // Draw overlapping lines for health groups
+        const lineGen = d3.line()
+            .x(d => x(d.time))
+            .y(d => y(d.mean))
+            .curve(d3.curveMonotoneX);
+        datasets.forEach(ds => {
+            g.append('path')
+             .attr('class', 'data-line')
+             .attr('fill', 'none')
+             .attr('stroke', colorScale(ds.group))
+             .attr('stroke-width', 2)
+             .attr('d', lineGen(ds.points));
+        });
+
+        // Update legend
+        const legend = d3.select('.legend');
+        legend.selectAll('*').remove();
+        datasets.forEach((ds, i) => {
+            const yPos = i * 20;
+            const entry = legend.append('g').attr('transform', `translate(0,${yPos})`);
+            entry.append('rect').attr('width', 12).attr('height', 12).attr('fill', colorScale(ds.group));
+            entry.append('text').attr('x', 16).attr('y', 10).text(ds.group);
+        });
+
+        // Title
+        g.selectAll('.title').remove();
+        g.append('text')
+         .attr('class', 'title')
+         .attr('x', width/2).attr('y', -10)
+         .attr('text-anchor', 'middle')
+         .text(`Glucose Response (${focus}) by Health Group`);
+    }
+    </script>
+</body>
+</html>

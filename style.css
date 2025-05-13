@@ -1,0 +1,161 @@
+body {
+    background: linear-gradient(135deg, #f4f7fa, #eaf1f7);
+    font-family: 'Inter', 'Roboto', system-ui, Arial, sans-serif;
+    margin: 0;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 40px auto;
+    padding: 32px 18px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.09);
+    border: 1.5px solid #e3e7ee;
+}
+
+#controls {
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#controls label {
+    font-weight: 600;
+    color: #2d3748;
+    margin-right: 8px;
+    font-size: 17px;
+}
+
+select {
+    margin-right: 20px;
+    padding: 8px 18px;
+    border-radius: 7px;
+    border: 1.5px solid #bfc7d1;
+    font-size: 16px;
+    background: #f7fafc;
+    transition: border 0.2s;
+}
+
+select:focus,
+select:hover {
+    border: 1.5px solid #38bdf8;
+    outline: none;
+    background: #e0f7ff;
+}
+
+.charts-row {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+#donutChartContainer,
+#lineChartContainer {
+    flex: 1;
+    max-width: 600px;
+}
+
+#donutChart,
+#lineChart {
+    width: 100%;
+    height: auto;
+}
+
+.chart-container {
+    padding: 20px;
+    background: white;
+    border-radius: 18px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.3s ease;
+    text-align: center;
+}
+
+.chart-container:hover {
+    box-shadow: 0 6px 26px rgba(0, 0, 0, 0.12);
+}
+
+.desc {
+    font-size: 15px;
+    color: #4a5568;
+    margin-bottom: 12px;
+    margin-top: 0;
+    max-width: 520px;
+    line-height: 1.6;
+}
+
+.legend {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.legend rect {
+    stroke-width: 1;
+    stroke: #000;
+}
+
+.title {
+    font-size: 20px;
+    font-weight: 700;
+    fill: #2d3748;
+}
+
+svg {
+    background-color: #f9fbfd;
+    border-radius: 12px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.count-text {
+    font-size: 13px;
+    fill: #666;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.chart-container {
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.svg-calorie-text {
+    animation: pulse 0.6s ease-in-out;
+}
+
+path:hover {
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.legend text:hover {
+    fill: #38bdf8;
+    cursor: pointer;
+}
+
+@media (max-width: 900px) {
+    .charts-row {
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    #donutChartContainer,
+    #lineChartContainer {
+        flex: 1 1 100%;
+    }
+}

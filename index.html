@@ -5,30 +5,20 @@
     <title>Comparative Glucose Response by Nutrient Focus and Health Group</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body { font-family: 'Inter', 'Roboto', system-ui, Arial, sans-serif; margin: 0; background: #f6f8fa; }
-        .container { max-width: 1200px; margin: 40px auto; padding: 32px 18px 32px 18px; background: #fff; border-radius: 18px; box-shadow: 0 6px 32px rgba(0,0,0,0.09); border: 1.5px solid #e3e7ee; }
-        #controls { margin-bottom: 32px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
-        #controls label { font-weight: 600; color: #2d3748; margin-right: 8px; font-size: 17px; }
-        select { margin-right: 20px; padding: 8px 18px; border-radius: 7px; border: 1.5px solid #bfc7d1; font-size: 16px; background: #f7fafc; transition: border 0.2s; }
-        select:focus, select:hover { border: 1.5px solid #4299e1; outline: none; background: #e6f0fa; }
-        .charts-row { display: flex; gap: 48px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
-        #lineChart, #donutChart { min-width: 340px; min-height: 340px; background: #f9fbfd; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); padding: 18px 8px 8px 8px; }
-        svg { background-color: #f9fbfd; border-radius: 12px; }
-        .count-text { font-size: 13px; fill: #666; }
-        .legend { font-size: 15px; }
-        .legend rect { stroke-width: 1; stroke: #000; }
-        .title { font-size: 22px; font-weight: 700; fill: #2d3748; }
-        .desc { font-size: 16px; color: #4a5568; margin-bottom: 10px; margin-top: 0; max-width: 520px; }
-        @media (max-width: 900px) {
-            .charts-row { flex-direction: column; align-items: center; gap: 32px; }
-            #lineChart, #donutChart { min-width: 260px; }
-        }
-    </style>
-    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:,">
 </head>
 <body>
     <div class="container">
+        <h1 style="text-align: center; font-size: 28px; font-weight: bold; margin-bottom: 20px;">
+            Comparative Glucose Response by Nutrient Focus and Health Group
+        </h1>
+        <p style="font-size: 16px; color: #4a5568; margin-bottom: 20px; text-align: center;">
+            <b>Dataset Overview:</b> The CGMacros dataset provides multimodal information from continuous glucose monitors (CGM), food macronutrients, food photographs, and physical activity, along with anonymized participant demographics, anthropometric measurements, and health parameters. It includes data from 45 participants (15 healthy, 16 pre-diabetic, and 14 with Type 2 diabetes) who consumed meals with varying macronutrient compositions over ten days. This dataset is a valuable resource for advancing research in personalized nutrition and automated diet monitoring.
+        </p>
+        <p style="font-size: 16px; color: #4a5568; margin-bottom: 20px; text-align: center;">
+            <b>Research Question:</b> How do different types of meals affect blood sugar levels in people with different health conditions?
+        </p>
         <div id="controls">
             <label>Nutrient Focus:</label>
             <select id="nutrientFocus">
@@ -45,286 +35,16 @@
             </select>
         </div>
         <div class="charts-row">
-            <div style="flex:1;min-width:340px;max-width:600px;">
+            <div class="chart-container" id="lineChartContainer">
                 <p class="desc"><b>Glucose Response Over Time:</b> This line chart shows the average blood glucose response (y-axis) at each minute after a meal (x-axis), for the selected nutrient focus and health group.</p>
                 <div id="lineChart"></div>
             </div>
-            <div style="flex:1;min-width:400px;max-width:700px;height:400px;">
+            <div class="chart-container" id="donutChartContainer">
                 <p class="desc"><b>Average Meal Nutrients:</b> The donut chart displays the average grams of Carbs, Protein, and Fat per meal, plus the calculated average calories, for the current selection.</p>
                 <div id="donutChart"></div>
             </div>
         </div>
     </div>
-
-    <script>
-    const margin = { top: 60, right: 150, bottom: 50, left: 60 };
-    const width  = 600 - margin.left - margin.right;
-    const height = 400 - margin.top - margin.bottom;
-
-    let rawData = [];
-    const healthGroups = ['Healthy','Pre-diabetic','Type 2 Diabetic'];
-    const colorScale = d3.scaleOrdinal()
-        .domain(healthGroups)
-        .range(['#1f77b4','#ff7f0e','#2ca02c']);
-
-    function parseRow(r) {
-        const carbs   = parseFloat((r['Carbs']||'').trim());
-        const protein = parseFloat((r['Protein']||'').trim());
-        const fat     = parseFloat((r['Fat']||'').trim());
-        if ([carbs,protein,fat].some(x=>isNaN(x))) return;
-        let nutrientFocus = 'High-Carb';
-        if (protein > carbs && protein >= fat) nutrientFocus = 'High-Protein';
-        else if (fat > carbs && fat > protein) nutrientFocus = 'High-Fat';
-
-        const a1cVal = parseFloat((r['A1c PDL (Lab)']||'').trim());
-        let healthGroup = 'Healthy';
-        if (a1cVal >= 6.5) healthGroup = 'Type 2 Diabetic';
-        else if (a1cVal >= 5.7) healthGroup = 'Pre-diabetic';
-
-        const sensors = [
-            {gl:'#1 Contour Fingerstick GLU', t:'Time (t)'},
-            {gl:' #2 Contour Fingerstick GLU', t:'Time (t).1'},
-            {gl:'#3 Contour Fingerstick GLU', t:'Time (t).2'}
-        ];
-        sensors.forEach(s => {
-            const glRaw = r[s.gl], tRaw = r[s.t];
-            if (!glRaw || !tRaw) return;
-            const glVal = parseFloat(glRaw);
-            const parts = tRaw.trim().split(':').map(x => parseInt(x, 10));
-            if (isNaN(glVal) || parts.length !== 2) return;
-            const [mm, ss] = parts;
-            if (isNaN(mm) || isNaN(ss)) return;
-            rawData.push({nutrientFocus, healthGroup, time: mm + ss/60, glucose: glVal, carbs, protein, fat});
-        });
-        ['Dexcom GL','Libre GL'].forEach(key => {
-            const val = parseFloat((r[key]||'').trim());
-            if (!isNaN(val)) rawData.push({nutrientFocus, healthGroup, time: 0, glucose: val, carbs, protein, fat});
-        });
-    }
-
-    // Ensure the fetch path is correct
-    fetch('./merged_data.csv.zip') // Ensure the file is in the same directory
-        .then(res => {
-            if (!res.ok) throw new Error(`Failed to fetch: ${res.statusText}`);
-            return res.arrayBuffer();
-        })
-        .then(JSZip.loadAsync)
-        .then(zip => {
-            const file = zip.file("merged_data.csv");
-            if (!file) throw new Error("merged_data.csv not found in the ZIP archive.");
-            return file.async("string");
-        })
-        .then(text => {
-            const rows = d3.csvParse(text);
-            rows.forEach(parseRow);
-            initialize();
-        })
-        .catch(err => {
-            console.error("Error loading or parsing data:", err);
-            alert("Failed to load data. Please check the console for details.");
-        });
-
-    function initialize() {
-        d3.select('#nutrientFocus').on('change', updateChart);
-        d3.select('#healthGroup').on('change', updateChart);
-
-        const svg = d3.select('#lineChart').append('svg')
-            .attr('width', width + margin.left + margin.right)
-            .attr('height', height + margin.top + margin.bottom)
-          .append('g')
-            .attr('transform', `translate(${margin.left},${margin.top})`)
-            .attr('class','line-g');
-
-        svg.append('g').attr('class','x-axis').attr('transform', `translate(0,${height})`);
-        svg.append('g').attr('class','y-axis');
-        svg.append('g').attr('class','legend')
-           .attr('transform', `translate(${width+20},0)`);
-
-        updateChart();
-    }
-
-    function updateChart() {
-        // Ensure rawData is not empty before proceeding
-        if (!rawData.length) {
-            console.warn("No data available to update charts.");
-            return;
-        }
-
-        const focus = d3.select('#nutrientFocus').property('value');
-        const group  = d3.select('#healthGroup').property('value');
-        const groupsToPlot = group === 'All' ? healthGroups : [group];
-
-        const datasets = groupsToPlot.map(hg => {
-            const filtered = rawData.filter(d =>
-                d.nutrientFocus === focus && d.healthGroup === hg
-            );
-            const agg = d3.rollup(filtered,
-                v => d3.mean(v, d => d.glucose),
-                d => d.time
-            );
-            const pts = Array.from(agg, ([time, mean]) => ({time, mean}))
-                                .sort((a, b) => a.time - b.time);
-            return { group: hg, points: pts };
-        });
-        renderChart(datasets, focus);
-        renderDonutChart(focus, group);
-    }
-
-    function renderChart(datasets, focus) {
-        const g = d3.select('.line-g');
-        g.selectAll('.data-line').remove();
-        g.selectAll('.grid-x').remove();
-        g.selectAll('.grid-y').remove();
-
-        const allTimes = datasets.flatMap(d => d.points.map(p => p.time));
-        const allMeans = datasets.flatMap(d => d.points.map(p => p.mean));
-        const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
-        const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
-
-        // Add grid lines
-        g.append('g')
-         .attr('class', 'grid-x')
-         .attr('transform', `translate(0,${height})`)
-         .call(d3.axisBottom(x)
-            .tickSize(-height)
-            .tickFormat('')
-         );
-        g.append('g')
-         .attr('class', 'grid-y')
-         .call(d3.axisLeft(y)
-            .tickSize(-width)
-            .tickFormat('')
-         );
-
-        // Transition axes
-        g.select('.x-axis')
-         .transition().duration(600)
-         .call(d3.axisBottom(x));
-        g.select('.y-axis')
-         .transition().duration(600)
-         .call(d3.axisLeft(y));
-
-        const lineGen = d3.line()
-            .x(d => x(d.time))
-            .y(d => y(d.mean))
-            .curve(d3.curveMonotoneX);
-        datasets.forEach(ds => {
-            g.append('path')
-             .attr('class', 'data-line')
-             .attr('fill', 'none')
-             .attr('stroke', colorScale(ds.group))
-             .attr('stroke-width', 2)
-             .attr('d', lineGen(ds.points));
-        });
-
-        const legend = d3.select('.legend');
-        legend.selectAll('*').remove();
-        datasets.forEach((ds, i) => {
-            const yPos = i * 20;
-            const entry = legend.append('g').attr('transform', `translate(0,${yPos})`);
-            entry.append('rect').attr('width', 12).attr('height', 12).attr('fill', colorScale(ds.group));
-            entry.append('text').attr('x', 16).attr('y', 10).text(ds.group);
-        });
-
-        g.selectAll('.title').remove();
-        g.append('text')
-         .attr('class', 'title')
-         .attr('x', width/2).attr('y', -18)
-         .attr('text-anchor', 'middle')
-         .attr('style', 'font-size:18px;font-weight:700;fill:#2d3748;max-width:440px;white-space:pre-line;')
-         .text(`Glucose Response (${focus}) by Health Group`)
-         .call(wrapText, 440);
-    }
-
-    function renderDonutChart(focus, group) {
-        d3.select('#donutChart').selectAll('*').remove();
-        let filtered = rawData.filter(d => d.nutrientFocus === focus);
-        if (group !== 'All') filtered = filtered.filter(d => d.healthGroup === group);
-        if (!filtered.length) return;
-        const meanCarbs = d3.mean(filtered, d => d.carbs);
-        const meanProtein = d3.mean(filtered, d => d.protein);
-        const meanFat = d3.mean(filtered, d => d.fat);
-        const meanCalories = meanCarbs * 4 + meanProtein * 4 + meanFat * 9;
-        const data = [
-            { label: 'Carbs', value: meanCarbs, color: '#4fd1c5' },
-            { label: 'Protein', value: meanProtein, color: '#63b3ed' },
-            { label: 'Fat', value: meanFat, color: '#fc8181' }
-        ];
-        const w = 480, h = 400, r = 120;
-        const svg = d3.select('#donutChart').append('svg')
-            .attr('width', w).attr('height', h)
-          .append('g')
-            .attr('transform', `translate(${r+40},${h/2})`);
-        const arc = d3.arc().innerRadius(r-40).outerRadius(r);
-        const pie = d3.pie().value(d => d.value);
-        svg.selectAll('path')
-            .data(pie(data))
-            .enter().append('path')
-            .attr('d', arc)
-            .attr('fill', d => d.data.color)
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2);
-        svg.selectAll('text')
-            .data(pie(data))
-            .enter().append('text')
-            .attr('transform', d => `translate(${arc.centroid(d)})`)
-            .attr('dy', '0.35em')
-            .attr('text-anchor', 'middle')
-            .style('font-size', '15px')
-            .style('fill', '#333')
-            .text(d => `${d.data.label}`);
-        svg.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('y', -10)
-            .style('font-size', '32px')
-            .style('font-weight', 'bold')
-            .style('fill', '#222')
-            .text(Math.round(meanCalories));
-        svg.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('y', 22)
-            .style('font-size', '16px')
-            .style('fill', '#666')
-            .text('Avg Calories');
-        const legend = svg.append('g').attr('transform', `translate(${r+80},${-r+10})`);
-        data.forEach((d, i) => {
-            legend.append('rect')
-                .attr('x', 0).attr('y', i*26)
-                .attr('width', 16).attr('height', 16)
-                .attr('fill', d.color);
-            legend.append('text')
-                .attr('x', 22).attr('y', i*26+13)
-                .style('font-size', '14px')
-                .style('fill', '#222')
-                .text(`${d.label}: ${d.value.toFixed(1)}g`);
-        });
-    }
-
-    // Add the wrapText function for SVG text wrapping
-    function wrapText(text, width) {
-        text.each(function() {
-            var text = d3.select(this),
-                words = text.text().split(/\s+/).reverse(),
-                word,
-                line = [],
-                lineNumber = 0,
-                lineHeight = 1.2, // ems
-                y = text.attr('y'),
-                x = text.attr('x'),
-                dy = 0,
-                tspan = text.text(null).append('tspan').attr('x', x).attr('y', y).attr('text-anchor', 'middle');
-            while (word = words.pop()) {
-                line.push(word);
-                tspan.text(line.join(' '));
-                if (tspan.node().getComputedTextLength() > width) {
-                    line.pop();
-                    tspan.text(line.join(' '));
-                    line = [word];
-                    tspan = text.append('tspan').attr('x', x).attr('y', y).attr('dy', ++lineNumber * lineHeight + 'em').attr('text-anchor', 'middle').text(word);
-                }
-            }
-        });
-    }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>

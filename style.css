@@ -176,7 +176,6 @@ path:hover {
     user-select: none;
 }
 
-/* Hide the native checkbox but keep it accessible */
 .health-checkbox {
     position: absolute;
     opacity: 0;
@@ -184,7 +183,6 @@ path:hover {
     height: 0;
 }
 
-/* Custom checkbox visual */
 .custom-checkbox {
     display: inline-block;
     width: 18px;
@@ -198,7 +196,6 @@ path:hover {
     box-sizing: border-box;
 }
 
-/* Checked state: color fill */
 .health-checkbox:checked + .custom-checkbox {
     background: #1f77b4;
     border-color: #1f77b4;
@@ -212,7 +209,6 @@ path:hover {
     border-color: #2ca02c;
 }
 
-/* Remove checkmark, just show colored box */
 .custom-checkbox::after {
     content: '';
     display: none;
@@ -233,7 +229,6 @@ path:hover {
         flex: 1 1 100%;
     }
 }
-/* Collapsible Data panel */
 .dataset-overview {
     margin-top: 40px;
     border-top: 1px solid #e3e7ee;
@@ -244,20 +239,20 @@ path:hover {
     font-weight: 600;
     font-size: 18px;
     color: #2d3748;
-    list-style: none;           /* remove default open/close arrow if you'd rather supply your own icon */
+    list-style: none;
   }
   .dataset-overview summary::-webkit-details-marker {
-    display: none;              /* hide default marker in WebKit */
+    display: none;
   }
   .dataset-overview summary::before {
-    content: "▶";               /* closed arrow */
+    content: "▶";
     display: inline-block;
     width: 1em;
     margin-right: 8px;
     transition: transform 0.2s ease;
   }
   .dataset-overview[open] summary::before {
-    transform: rotate(90deg);   /* rotate when open */
+    transform: rotate(90deg);
   }
   .overview-content {
     margin-top: 12px;

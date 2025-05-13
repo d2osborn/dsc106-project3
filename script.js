@@ -77,6 +77,8 @@ function initialize() {
 }
 
 function updateChart() {
+    // Reset zoom on aggregation change
+    renderChart.currentXDomain = null;
     if (!rawData.length) {
         console.warn("No data available to update charts.");
         return;
@@ -102,7 +104,16 @@ function updateChart() {
 }
 
 function renderChart(datasets, focus) {
+    // Responsive SVG sizing
+    const container = document.getElementById('lineChart');
+    const containerWidth = container.offsetWidth || 600;
+    const containerHeight = container.offsetHeight || 400;
     const svgSel = d3.select('#lineChart svg');
+    svgSel.attr('width', '100%')
+          .attr('height', '100%')
+          .attr('viewBox', `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+          .attr('preserveAspectRatio', 'xMidYMid meet');
+
     const g = d3.select('.line-g');
     g.selectAll('.data-line').remove();
     g.selectAll('.grid-x').remove();
@@ -197,10 +208,11 @@ function renderChart(datasets, focus) {
     const legend = d3.select('.legend');
     legend.selectAll('*').remove();
     datasets.forEach((ds, i) => {
-        const yPos = i * 20;
+        // Responsive legend spacing
+        const yPos = i * 24 * (containerWidth / 600);
         const entry = legend.append('g').attr('transform', `translate(0,${yPos})`);
-        entry.append('rect').attr('width', 12).attr('height', 12).attr('fill', colorScale(ds.group));
-        entry.append('text').attr('x', 16).attr('y', 10).text(ds.group);
+        entry.append('rect').attr('width', 12 * (containerWidth / 600)).attr('height', 12 * (containerWidth / 600)).attr('fill', colorScale(ds.group));
+        entry.append('text').attr('x', 16 * (containerWidth / 600)).attr('y', 10 * (containerWidth / 600)).style('font-size', `${14 * (containerWidth / 600)}px`).text(ds.group);
     });
 
     g.selectAll('.title').remove();
@@ -290,6 +302,10 @@ function renderChart(datasets, focus) {
 function renderDonutChart(focus, groups) {
     const svgContainer = d3.select('#donutChart');
     svgContainer.selectAll('*').remove();
+    // Use the same margin, width, and height as the time series chart
+    const w = width + margin.left + margin.right;
+    const h = height + margin.top + margin.bottom;
+    const r = Math.min(width, height) / 2;
 
     let filtered = rawData.filter(d => d.nutrientFocus === focus && groups.includes(d.healthGroup));
     if (!filtered.length) return;
@@ -305,11 +321,12 @@ function renderDonutChart(focus, groups) {
         { label: 'Fat', value: meanFat, color: '#fc8181', index: 2 }
     ];
 
-    const w = 480, h = 400, r = 120;
     const svg = svgContainer.append('svg')
-        .attr('width', w).attr('height', h)
+        .attr('width', '100%').attr('height', '100%')
+        .attr('viewBox', `0 0 ${w} ${h}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet')
       .append('g')
-        .attr('transform', `translate(${r + 40},${h / 2})`);
+        .attr('transform', `translate(${margin.left + width / 2},${margin.top + height / 2})`);
 
     const arc = d3.arc().innerRadius(r - 40).outerRadius(r);
     const pie = d3.pie()
@@ -389,16 +406,17 @@ function renderDonutChart(focus, groups) {
         .style('fill', '#666')
         .text('Avg Calories');
 
-    const legend = svg.append('g').attr('transform', `translate(${r + 80},${-r + 10})`);
+    const legend = svg.append('g').attr('transform', `translate(${r + 60},${-r})`);
+    const legendScale = 1.25 * (width / 480);
     data.forEach((d, i) => {
         legend.append('rect')
-            .attr('x', 0).attr('y', i * 26)
-            .attr('width', 16).attr('height', 16)
+            .attr('x', 0).attr('y', i * 26 * legendScale)
+            .attr('width', 16 * legendScale).attr('height', 16 * legendScale)
             .attr('fill', d.color);
         legend.append('text')
-            .attr('x', 22).attr('y', i * 26 + 13)
+            .attr('x', 22 * legendScale).attr('y', i * 26 * legendScale + 13 * legendScale)
             .attr('class', 'donut-legend-text')
-            .style('font-size', '14px')
+            .style('font-size', `${14 * legendScale}px`)
             .style('font-weight', 'bold')
             .style('fill', '#222')
             .text(`${d.label}: ${d.value.toFixed(1)}g`)

@@ -233,3 +233,36 @@ path:hover {
         flex: 1 1 100%;
     }
 }
+/* Collapsible Data panel */
+.dataset-overview {
+    margin-top: 40px;
+    border-top: 1px solid #e3e7ee;
+    padding-top: 24px;
+  }
+  .dataset-overview summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 18px;
+    color: #2d3748;
+    list-style: none;           /* remove default open/close arrow if you’d rather supply your own icon */
+  }
+  .dataset-overview summary::-webkit-details-marker {
+    display: none;              /* hide default marker in WebKit */
+  }
+  .dataset-overview summary::before {
+    content: "▶";               /* closed arrow */
+    display: inline-block;
+    width: 1em;
+    margin-right: 8px;
+    transition: transform 0.2s ease;
+  }
+  .dataset-overview[open] summary::before {
+    transform: rotate(90deg);   /* rotate when open */
+  }
+  .overview-content {
+    margin-top: 12px;
+    font-size: 15px;
+    color: #4a5568;
+    line-height: 1.6;
+  }
+  

@@ -9,7 +9,11 @@
     <link rel="icon" href="data:,">
 </head>
 <body>
-    <div class="container">
+    <div id="loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
+        <div class="spinner"></div>
+        <div style="margin-top: 18px; font-size: 18px; color: #2d3748;">Loading data, please wait...</div>
+    </div>
+    <div class="container" style="display:none;">
         <h1 style="text-align: center; font-size: 28px; font-weight: bold; margin-bottom: 20px;">
             Comparative Glucose Response by Nutrient Focus and Health Group
         </h1>

@@ -114,6 +114,29 @@ function renderChart(datasets, focus) {
     g.select('.x-axis').transition().duration(600).call(d3.axisBottom(x));
     g.select('.y-axis').transition().duration(600).call(d3.axisLeft(y));
 
+    // X axis label
+    g.selectAll('.x-axis-label').remove();
+    g.append('text')
+        .attr('class', 'x-axis-label')
+        .attr('text-anchor', 'middle')
+        .attr('x', width / 2)
+        .attr('y', height + 40)
+        .style('font-size', '16px')
+        .style('fill', '#333')
+        .text('Minutes After Meal');
+
+    // Y axis label
+    g.selectAll('.y-axis-label').remove();
+    g.append('text')
+        .attr('class', 'y-axis-label')
+        .attr('text-anchor', 'middle')
+        .attr('transform', `rotate(-90)`)
+        .attr('x', -height / 2)
+        .attr('y', -48)
+        .style('font-size', '16px')
+        .style('fill', '#333')
+        .text('Blood Glucose (mg/dL)');
+
     const lineGen = d3.line()
         .x(d => x(d.time))
         .y(d => y(d.mean))
@@ -169,9 +192,9 @@ function renderDonutChart(focus, group) {
     const meanCalories = meanCarbs * 4 + meanProtein * 4 + meanFat * 9;
 
     const data = [
-        { label: 'Carbs', value: meanCarbs, color: '#4fd1c5' },
-        { label: 'Protein', value: meanProtein, color: '#63b3ed' },
-        { label: 'Fat', value: meanFat, color: '#fc8181' }
+        { label: 'Carbs', value: meanCarbs, color: '#4fd1c5', index: 0 },
+        { label: 'Protein', value: meanProtein, color: '#63b3ed', index: 1 },
+        { label: 'Fat', value: meanFat, color: '#fc8181', index: 2 }
     ];
 
     const w = 480, h = 400, r = 120;
@@ -181,15 +204,34 @@ function renderDonutChart(focus, group) {
         .attr('transform', `translate(${r + 40},${h / 2})`);
 
     const arc = d3.arc().innerRadius(r - 40).outerRadius(r);
-    const pie = d3.pie().value(d => d.value);
+    const pie = d3.pie()
+        .sort((a, b) => a.index - b.index) // Always keep order: Carbs, Protein, Fat
+        .value(d => d.value);
 
-    const paths = svg.selectAll('path').data(pie(data));
-    paths.enter()
+    // Store previous data for smooth transitions
+    if (!renderDonutChart.prevData) {
+        renderDonutChart.prevData = [
+            { label: 'Carbs', value: meanCarbs, color: '#4fd1c5', index: 0 },
+            { label: 'Protein', value: meanProtein, color: '#63b3ed', index: 1 },
+            { label: 'Fat', value: meanFat, color: '#fc8181', index: 2 }
+        ];
+    }
+    const prevData = renderDonutChart.prevData;
+
+    // Bind data and animate arcs to new values, keeping order fixed
+    const arcs = svg.selectAll('path')
+        .data(pie(data), d => d.data.label);
+
+    arcs.enter()
         .append('path')
         .attr('fill', d => d.data.color)
         .attr('stroke', '#fff')
         .attr('stroke-width', 2)
-        .each(function(d) { this._current = d; })
+        .each(function(d, i) {
+            // Set initial state to previous data for smooth animation
+            const prevPie = pie(prevData);
+            this._current = prevPie[i];
+        })
         .on('mouseover', function(event, d) {
             d3.select(this).style('opacity', 0.8);
             showTooltip(event, `${d.data.label}: ${d.data.value.toFixed(1)}g`);
@@ -200,25 +242,29 @@ function renderDonutChart(focus, group) {
         })
         .transition()
         .duration(600)
-        .attrTween('d', function(d) {
-            const interpolate = d3.interpolate(this._current, d);
+        .attrTween('d', function(d, i) {
+            const prevPie = pie(prevData);
+            const interpolate = d3.interpolate(prevPie[i], d);
             this._current = interpolate(1);
             return function(t) {
                 return arc(interpolate(t));
             };
         });
 
-    paths.transition()
+    arcs.transition()
         .duration(600)
-        .attrTween('d', function(d) {
-            const interpolate = d3.interpolate(this._current, d);
+        .attrTween('d', function(d, i) {
+            const prevPie = pie(prevData);
+            const interpolate = d3.interpolate(this._current || prevPie[i], d);
             this._current = interpolate(1);
             return function(t) {
                 return arc(interpolate(t));
             };
         });
 
-    paths.exit().remove();
+    arcs.exit().remove();
+
+    renderDonutChart.prevData = data.map(d => ({ ...d })); // Save for next update
 
     svg.selectAll('.calories-text').remove();
     svg.append('text')
@@ -281,6 +327,21 @@ function toggleSegment(label) {
     // Add logic to toggle visibility of the corresponding segment
 }
 
+function showLoading(show) {
+    const loadingDiv = document.getElementById('loading');
+    const containerDiv = document.querySelector('.container');
+    if (show) {
+        if (loadingDiv) loadingDiv.style.display = 'flex';
+        if (containerDiv) containerDiv.style.display = 'none';
+    } else {
+        if (loadingDiv) loadingDiv.style.display = 'none';
+        if (containerDiv) containerDiv.style.display = '';
+    }
+}
+
+// Show loading at the start
+showLoading(true);
+
 // Fetch and parse data
 fetch('./merged_data.csv.zip')
     .then(res => {
@@ -297,8 +358,10 @@ fetch('./merged_data.csv.zip')
         const rows = d3.csvParse(text);
         rows.forEach(parseRow);
         initialize();
+        showLoading(false); // Hide loading, show content
     })
     .catch(err => {
         console.error("Error loading or parsing data:", err);
         alert("Failed to load data. Please check the console for details.");
+        showLoading(false);
     });

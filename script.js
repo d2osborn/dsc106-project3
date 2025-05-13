@@ -120,29 +120,35 @@ function renderChart(datasets, focus) {
         .attr('width', width)
         .attr('height', height);
 
-    // Group for lines, clipped to chart area
-    let linesGroup = g.select('.lines-group');
-    if (linesGroup.empty()) {
-        linesGroup = g.append('g').attr('class', 'lines-group').attr('clip-path', 'url(#chart-clip)');
-    } else {
-        linesGroup.attr('clip-path', 'url(#chart-clip)');
-        linesGroup.selectAll('*').remove();
-    }
-
     const allTimes = datasets.flatMap(d => d.points.map(p => p.time));
     const allMeans = datasets.flatMap(d => d.points.map(p => p.mean));
     const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
     const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
 
-    // Add zoom behavior
+    // --- ZOOM: Only x-axis ---
     const zoom = d3.zoom()
         .scaleExtent([1, 10])
         .translateExtent([[0, 0], [width, height]])
         .extent([[0, 0], [width, height]])
         .on("zoom", zoomed);
 
+    svgSel.on(".zoom", null); // Remove previous zoom if any
     svgSel.call(zoom);
 
+    function zoomed(event) {
+        const t = event.transform;
+        const zx = t.rescaleX(x);
+        g.select('.x-axis').call(d3.axisBottom(zx));
+        g.select('.y-axis').call(d3.axisLeft(y));
+        const lineGen = d3.line()
+            .x(d => zx(d.time))
+            .y(d => y(d.mean))
+            .curve(d3.curveMonotoneX);
+        g.selectAll('.data-line')
+            .attr('d', d => lineGen(d.points));
+    }
+
+    // Draw grid first
     g.append('g')
      .attr('class', 'grid-x')
      .attr('transform', `translate(0,${height})`)
@@ -185,14 +191,20 @@ function renderChart(datasets, focus) {
         .y(d => y(d.mean))
         .curve(d3.curveMonotoneX);
 
+    // Create linesGroup after grid
+    const linesGroup = g.append('g')
+        .attr('class', 'lines-group')
+        .attr('clip-path', 'url(#chart-clip)');
+
+    // Draw lines after grid
     datasets.forEach(ds => {
         const path = linesGroup.append('path')
-            .datum(ds.points)
+            .datum(ds)
             .attr('class', 'data-line')
             .attr('fill', 'none')
             .attr('stroke', colorScale(ds.group))
             .attr('stroke-width', 2)
-            .attr('d', lineGen);
+            .attr('d', d => lineGen(d.points));
 
         const totalLength = path.node().getTotalLength();
         path.attr('stroke-dasharray', `${totalLength} ${totalLength}`)
@@ -220,24 +232,40 @@ function renderChart(datasets, focus) {
      .attr('style', 'font-size:18px;font-weight:700;fill:#2d3748;max-width:440px;white-space:pre-line;')
      .text(`Glucose Response (${focus}) by Health Group`);
 
-    function zoomed(event) {
-        const t = event.transform;
-        const zx = t.rescaleX(x);
-        const zy = t.rescaleY(y);
+    // --- ZOOM INDICATOR ---
+    // Remove any previous indicator
+    d3.select('#zoom-indicator').remove();
+    // Add indicator div
+    d3.select('#lineChartContainer')
+        .append('div')
+        .attr('id', 'zoom-indicator')
+        .attr('class', 'zoom-indicator')
+        .style('display', 'none')
+        .text('Tip: Scroll or pinch to zoom in/out on the x-axis');
 
-        // Redraw axes
-        g.select('.x-axis').call(d3.axisBottom(zx));
-        g.select('.y-axis').call(d3.axisLeft(zy));
-
-        // Redraw lines, clipped
-        const lineGen = d3.line()
-            .x(d => zx(d.time))
-            .y(d => zy(d.mean))
-            .curve(d3.curveMonotoneX);
-
-        linesGroup.selectAll('.data-line')
-            .attr('d', d => lineGen(d));
-    }
+    // Show indicator on hover, hide after 2.5s or on mouseleave
+    const chartDiv = document.getElementById('lineChart');
+    let zoomIndicatorTimeout;
+    chartDiv.addEventListener('mouseenter', () => {
+        const indicator = document.getElementById('zoom-indicator');
+        if (indicator) {
+            indicator.style.display = 'block';
+            indicator.style.opacity = '1';
+            clearTimeout(zoomIndicatorTimeout);
+            zoomIndicatorTimeout = setTimeout(() => {
+                indicator.style.opacity = '0';
+                setTimeout(() => { indicator.style.display = 'none'; }, 400);
+            }, 2500);
+        }
+    });
+    chartDiv.addEventListener('mouseleave', () => {
+        const indicator = document.getElementById('zoom-indicator');
+        if (indicator) {
+            indicator.style.opacity = '0';
+            setTimeout(() => { indicator.style.display = 'none'; }, 400);
+        }
+        clearTimeout(zoomIndicatorTimeout);
+    });
 }
 
 function renderDonutChart(focus, groups) {

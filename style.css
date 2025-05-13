@@ -244,7 +244,7 @@ path:hover {
     font-weight: 600;
     font-size: 18px;
     color: #2d3748;
-    list-style: none;           /* remove default open/close arrow if you’d rather supply your own icon */
+    list-style: none;           /* remove default open/close arrow if you'd rather supply your own icon */
   }
   .dataset-overview summary::-webkit-details-marker {
     display: none;              /* hide default marker in WebKit */
@@ -265,4 +265,21 @@ path:hover {
     color: #4a5568;
     line-height: 1.6;
   }
-  
+
+.zoom-indicator {
+    position: absolute;
+    right: 24px;
+    top: 18px;
+    background: #f0f9ff;
+    color: #2563eb;
+    border: 1.5px solid #38bdf8;
+    border-radius: 7px;
+    padding: 8px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 2px 12px rgba(56,189,248,0.08);
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+}

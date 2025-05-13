@@ -139,7 +139,6 @@
         const x = d3.scaleLinear().domain(d3.extent(allTimes)).nice().range([0, width]);
         const y = d3.scaleLinear().domain(d3.extent(allMeans)).nice().range([height, 0]);
 
-        // Transition axes
         g.select('.x-axis')
          .transition().duration(600)
          .call(d3.axisBottom(x));
@@ -147,7 +146,6 @@
          .transition().duration(600)
          .call(d3.axisLeft(y));
 
-        // Draw overlapping lines for health groups
         const lineGen = d3.line()
             .x(d => x(d.time))
             .y(d => y(d.mean))
@@ -161,7 +159,6 @@
              .attr('d', lineGen(ds.points));
         });
 
-        // Update legend
         const legend = d3.select('.legend');
         legend.selectAll('*').remove();
         datasets.forEach((ds, i) => {
@@ -171,7 +168,6 @@
             entry.append('text').attr('x', 16).attr('y', 10).text(ds.group);
         });
 
-        // Title
         g.selectAll('.title').remove();
         g.append('text')
          .attr('class', 'title')

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Comparative Glucose Response by Nutrient Focus and Health Group</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
@@ -79,10 +80,16 @@
         });
     }
 
-    d3.csv('merged_data.csv').then(rows => {
-        rows.forEach(parseRow);
-        initialize();
-    }).catch(console.error);
+    fetch('merged_data.csv.zip')
+        .then(res => res.arrayBuffer())
+        .then(JSZip.loadAsync)
+        .then(zip => zip.file("merged_data.csv").async("string"))
+        .then(text => {
+            const rows = d3.csvParse(text);
+            rows.forEach(parseRow);
+            initialize();
+        })
+        .catch(console.error);
 
     function initialize() {
         d3.select('#nutrientFocus').on('change', updateChart);
